@@ -1,0 +1,59 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: site
+        continue-on-error: true
+
+      - name: Exit early if no [deploy] tag in commit
+        if: github.event_name == 'push' && !contains(github.event.head_commit.message, '[deploy]')
+        run: exit 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install curl_cffi beautifulsoup4 lxml httpx requests
+
+      - name: Sync games (Online-Fix)
+        run: python main.py sync
+
+      - name: Sync games (FreeTP)
+        run: python main.py freetp
+
+      - name: Fetch Steam data
+        run: python main.py steamdb
+
+      - name: Build static site
+        run: python build_site.py site
+
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
+          publish_branch: gh-pages
+          user_name: "github-actions"
+          user_email: "github-actions@github.com"
