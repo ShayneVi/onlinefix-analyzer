@@ -41,7 +41,7 @@ jobs:
         run: python main.py sync
 
       - name: Sync games (FreeTP)
-        run: python main.py freetp
+        run: python main.py freetp || echo "FreeTP sync skipped (site blocked or down)"
 
       - name: Fetch Steam data
         run: python main.py steamdb
