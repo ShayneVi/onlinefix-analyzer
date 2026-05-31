@@ -20,11 +20,17 @@ jobs:
         with:
           ref: main
 
+      - name: Save database from main branch
+        run: cp site/games.db /tmp/games.db 2>/dev/null || true
+
       - uses: actions/checkout@v4
         with:
           ref: gh-pages
           path: site
         continue-on-error: true
+
+      - name: Restore database from main branch
+        run: cp /tmp/games.db site/games.db 2>/dev/null || true
 
       - name: Exit early if no [deploy] tag in commit
         if: github.event_name == 'push' && !contains(github.event.head_commit.message, '[deploy]')
