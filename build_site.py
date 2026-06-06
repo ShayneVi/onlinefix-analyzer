@@ -392,6 +392,7 @@ function showDetail(id) {
   if (g.platform) html += '<tr><td>Platform</td><td>'+esc(g.platform)+'</td></tr>';
   if (g.mod_name) html += '<tr><td>Mod(s)</td><td>'+esc(g.mod_name)+'</td></tr>';
   if (g.mod_notes) html += '<tr><td>Notes</td><td>'+esc(g.mod_notes)+'</td></tr>';
+  if (g.sources && g.sources.indexOf('megalist') !== -1) html += '<tr><td>Mod List</td><td><a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vSV41AswEt3EpzSyd85YRVtoJaIIXWjtBy347dISJg4fs6xSNPqcgfsh76TxX_l-mnT7pjMlSqTW-87/pubhtml" target="_blank">Multiplayer Mods MEGA-LIST ↗</a></td></tr>';
   html += '</table>';
 
   detail.innerHTML = html;
