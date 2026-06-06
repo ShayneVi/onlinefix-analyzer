@@ -13,6 +13,7 @@ from database import init_db, get_all_games, count_games, count_with_steam, get_
 from scraper import sync
 from steam_lookup import sync_steamdb
 from freetp_scraper import sync_freetp
+from megalist_import import sync_megalist
 import config
 
 logger = logging.getLogger("onlinefix")
@@ -61,6 +62,12 @@ def cmd_sync(args):
         print(f"ERROR: {e}")
         print("Sync stopped. Re-run to resume from this point.")
         sys.exit(1)
+
+
+def cmd_megalist(args):
+    init_db()
+    sync_megalist()
+    print(f"Total in database: {count_games()}")
 
 
 def cmd_freetp(args):
@@ -285,6 +292,8 @@ def main():
 
     sub.add_parser("sync", help="Sync games from online-fix.me (state-aware, resumable)")
 
+    sub.add_parser("megalist", help="Import Multiplayer Mods MEGA-LIST into database")
+
     p_freetp = sub.add_parser("freetp", help="Sync game fix links from freetp.org")
     p_freetp.add_argument("-n", "--max-pages", type=int, default=0,
                           help="Max pages to scrape (0=all)")
@@ -340,6 +349,7 @@ def main():
 
     cmd_map = {
         "sync": cmd_sync,
+        "megalist": cmd_megalist,
         "freetp": cmd_freetp,
         "steamdb": cmd_steamdb,
         "status": cmd_status,

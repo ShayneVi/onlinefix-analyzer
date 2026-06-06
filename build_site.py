@@ -75,6 +75,7 @@ h1 span{color:#58a6ff;font-size:13px;font-weight:400}
 .card-meta .mode{font-size:10px;padding:1px 4px;border-radius:2px}
 .mode-coop{background:#1f3a3a;color:#7ee787}
 .mode-multi{background:#2a1f3a;color:#bc8cff}
+.mode-mod{background:#3a2a1f;color:#ffa657}
 
 .overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.7);z-index:100;justify-content:center;align-items:center}
 .overlay.show{display:flex}
@@ -120,7 +121,8 @@ h1 span{font-size:11px}
 <div class="filters" id="filters">
   <div class="filter-group" id="filter-group">
   <label>Search <input type="text" id="f-search" placeholder="title..."></label>
-  <label>Source <select id="f-source"><option value="">All</option><option value="ofme">Online-Fix only</option><option value="freetp">FreeTP only</option><option value="ofme,freetp">Both</option></select></label>
+  <label>Source <select id="f-source"><option value="">All</option><option value="ofme">Online-Fix only</option><option value="freetp">FreeTP only</option><option value="ofme,freetp">Both (OFME+FreeTP)</option><option value="megalist">Multiplayer Mods</option></select></label>
+  <label>Platform <select id="f-platform"><option value="">All</option></select></label>
   <label>FixMe Category <select id="f-cat"><option value="">All</option></select></label>
   <span class="sep"></span>
   <label title="Minimum Steam rating %">Rating &#x2265;<span><input type="range" id="f-rating" min="0" max="100" value="0" step="5"><span id="f-rating-val" style="font-size:11px;color:#8b949e;min-width:28px">0</span></span></label>
@@ -260,7 +262,8 @@ function filterGames(skipUpdateHash) {
 
   document.getElementById('f-rating-val').textContent = minRating;
 
-  var sig = [search, source, cat, minRating, coop, multi, minPlayers, sort, activeGenres.join(','), isAnd].join('|');
+  var platform = document.getElementById('f-platform').value;
+  var sig = [search, source, platform, cat, minRating, coop, multi, minPlayers, sort, activeGenres.join(','), isAnd].join('|');
   if (sig === _lastRenderedHash) {
     if (skipUpdateHash !== true) updateHash();
     return;
@@ -273,14 +276,19 @@ function filterGames(skipUpdateHash) {
       if (t.indexOf(search.replace(/['\u2018-\u201f]/g, '')) === -1) return false;
     }
     if (source) {
+      var src = g.sources || '';
       if (source === 'ofme,freetp') {
-        if (g.sources !== 'ofme,freetp') return false;
+        if (src !== 'ofme,freetp') return false;
       } else if (source === 'ofme') {
-        if (g.sources !== 'ofme' && g.sources !== 'ofme,freetp') return false;
+        if (src.indexOf('ofme') === -1) return false;
       } else if (source === 'freetp') {
-        if (g.sources !== 'freetp' && g.sources !== 'ofme,freetp') return false;
+        if (src.indexOf('freetp') === -1) return false;
+      } else if (source === 'megalist') {
+        if (src.indexOf('megalist') === -1) return false;
       }
     }
+    var platform = document.getElementById('f-platform').value;
+    if (platform && g.platform !== platform) return false;
     if (cat && g.category !== cat) return false;
     if (minRating > 0 && (g.rating_pct || 0) < minRating) return false;
     if (coop && !g.coop) return false;
@@ -320,11 +328,13 @@ function render(games) {
     var ratingHtml = g.rating_pct ? '<span class="rating '+rc+'">'+g.rating_pct+'%</span>' : '<span class="rating rating-none">-</span>';
     var coopHtml = g.coop ? '<span class="mode mode-coop">Co-op</span>' : '';
     var multiHtml = g.multiplayer ? '<span class="mode mode-multi">Multi</span>' : '';
-    html += '<div class="card" data-id="'+g.id+'" data-url="'+esc(g.url)+'">'
+    var modHtml = (g.sources && g.sources.indexOf('megalist') !== -1) ? '<span class="mode mode-mod">Mod</span>' : '';
+    var cardUrl = g.url || (g.freetp_url || '#');
+    html += '<div class="card" data-id="'+g.id+'" data-url="'+esc(cardUrl)+'">'
     + img
     + '<div class="card-body">'
     + '<div class="card-title">'+esc(g.title)+'</div>'
-    + '<div class="card-meta">'+ratingHtml+' '+coopHtml+' '+multiHtml+' <span class="views">'+formatNum(g.views)+'</span></div>'
+    + '<div class="card-meta">'+ratingHtml+' '+coopHtml+' '+multiHtml+' '+modHtml+' <span class="views">'+formatNum(g.views)+'</span></div>'
     + '</div></div>';
 
   }
@@ -379,6 +389,9 @@ function showDetail(id) {
   if (g.steam_appid) html += '<tr><td>Steam</td><td><a href="https://store.steampowered.com/app/'+g.steam_appid+'" target="_blank">Store</a></td></tr>';
   if (g.url) html += '<tr><td>Online-Fix</td><td><a href="'+esc(g.url)+'" target="_blank">View fix</a></td></tr>';
   if (g.freetp_url) html += '<tr><td>FreeTP</td><td><a href="'+esc(g.freetp_url)+'" target="_blank">View fix</a></td></tr>';
+  if (g.platform) html += '<tr><td>Platform</td><td>'+esc(g.platform)+'</td></tr>';
+  if (g.mod_name) html += '<tr><td>Mod(s)</td><td>'+esc(g.mod_name)+'</td></tr>';
+  if (g.mod_notes) html += '<tr><td>Notes</td><td>'+esc(g.mod_notes)+'</td></tr>';
   html += '</table>';
 
   detail.innerHTML = html;
@@ -510,6 +523,13 @@ function loadHash() {
     var o = document.createElement('option'); o.value = c; o.textContent = c; sel.appendChild(o);
   });
 
+  var platforms = {};
+  for (var i = 0; i < GAMES.length; i++) { var p = GAMES[i].platform; if (p) platforms[p] = 1; }
+  var psel = document.getElementById('f-platform');
+  Object.keys(platforms).sort().forEach(function(p) {
+    var o = document.createElement('option'); o.value = p; o.textContent = p; psel.appendChild(o);
+  });
+
   var GENRES = __GENRES__.split(',');
   var genreDiv = document.getElementById('f-genres');
   for (var gi = 0; gi < GENRES.length; gi++) {
@@ -531,6 +551,7 @@ function loadHash() {
     clearTimeout(_sd); _sd = setTimeout(filterGames, 150);
   });
   document.getElementById('f-source').addEventListener('change', filterGames);
+  document.getElementById('f-platform').addEventListener('change', filterGames);
   document.getElementById('f-cat').addEventListener('change', filterGames);
   var _rd; document.getElementById('f-rating').addEventListener('input', function() {
     document.getElementById('f-rating-val').textContent = this.value;
@@ -544,6 +565,7 @@ function loadHash() {
     location.hash = '';
     document.getElementById('f-search').value = '';
     document.getElementById('f-source').value = '';
+    document.getElementById('f-platform').value = '';
     document.getElementById('f-cat').value = '';
     document.getElementById('f-rating').value = '0';
     document.getElementById('f-rating-val').textContent = '0';
@@ -705,13 +727,14 @@ def build(site_dir: str = "site"):
         SELECT g.id, g.title, g.category, g.views, g.comments,
                g.has_coop, g.has_multiplayer, g.release_date, g.poster_url,
                g.url as of_url, g.freetp_url, g.sources, g.last_updated,
+               g.platform, g.mod_name, g.mod_notes,
                s.steam_appid, s.steam_name, s.review_score, s.review_count,
                s.review_desc, s.price_usd, s.players_estimate, s.genres,
                s.tags, s.developer, s.publisher, s.metacritic_score,
                s.is_multiplayer as steam_multiplayer, s.is_coop as steam_coop
         FROM games g
-        INNER JOIN steam_info s ON g.id = s.game_id
-        WHERE s.steam_appid > 0
+        LEFT JOIN steam_info s ON g.id = s.game_id
+        WHERE (s.steam_appid > 0 OR g.sources = 'megalist' OR (g.sources IS NOT NULL AND g.sources LIKE '%megalist%'))
         ORDER BY g.views DESC
         """
     ).fetchall()
@@ -723,13 +746,13 @@ def build(site_dir: str = "site"):
         pct = 0
         if g.get("review_count") and g["review_count"] > 0:
             pct = round(g["review_score"] / g["review_count"] * 100)
-        steam_status = "delisted" if (g["steam_appid"] and g["steam_appid"] > 0 and (not g.get("review_count") or g["review_count"] == 0)) else "ok"
+        steam_status = "delisted" if (g["steam_appid"] and g["steam_appid"] > 0 and (not g["review_count"] or g["review_count"] == 0)) else "ok"
         games.append({
             "id": g["id"],
             "title": g["title"],
-            "category": g["category"],
-            "views": g["views"],
-            "comments": g["comments"],
+            "category": g["category"] or "",
+            "views": g["views"] or 0,
+            "comments": g["comments"] or 0,
             "coop": bool(g["has_coop"]),
             "multiplayer": bool(g["has_multiplayer"]),
             "release_date": g["release_date"] or "",
@@ -739,6 +762,9 @@ def build(site_dir: str = "site"):
             "freetp_url": g["freetp_url"] or "",
             "sources": g["sources"] or "ofme",
             "last_updated": g["last_updated"] or "",
+            "platform": g["platform"] or "",
+            "mod_name": g["mod_name"] or "",
+            "mod_notes": g["mod_notes"] or "",
             "steam_appid": g["steam_appid"],
             "steam_name": g["steam_name"] or "",
             "rating_pct": pct,
@@ -750,8 +776,8 @@ def build(site_dir: str = "site"):
             "developer": g["developer"] or "",
             "publisher": g["publisher"] or "",
             "metacritic": g["metacritic_score"] or 0,
-            "steam_multiplayer": bool(g["steam_multiplayer"]),
-            "steam_coop": bool(g["steam_coop"]),
+            "steam_multiplayer": bool(g["steam_multiplayer"]) if g["steam_multiplayer"] is not None else False,
+            "steam_coop": bool(g["steam_coop"]) if g["steam_coop"] is not None else False,
             "steam_status": steam_status,
         })
 

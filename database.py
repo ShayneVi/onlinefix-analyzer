@@ -101,7 +101,7 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_steam_review_score ON steam_info(review_score);
             COMMIT;
         """)
-    # Migration: add freetp_url and sources columns if they don't exist
+    # Migration: add columns if they don't exist
     existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(games)").fetchall()}
     if "freetp_url" not in existing_cols:
         conn.execute("ALTER TABLE games ADD COLUMN freetp_url TEXT")
@@ -109,6 +109,12 @@ def init_db():
         conn.execute("ALTER TABLE games ADD COLUMN sources TEXT DEFAULT 'ofme'")
         # Back-fill existing rows so they're correctly labelled
         conn.execute("UPDATE games SET sources='ofme' WHERE sources IS NULL")
+    if "platform" not in existing_cols:
+        conn.execute("ALTER TABLE games ADD COLUMN platform TEXT")
+    if "mod_name" not in existing_cols:
+        conn.execute("ALTER TABLE games ADD COLUMN mod_name TEXT")
+    if "mod_notes" not in existing_cols:
+        conn.execute("ALTER TABLE games ADD COLUMN mod_notes TEXT")
 
     conn.commit()
     conn.close()
