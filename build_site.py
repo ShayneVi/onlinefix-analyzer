@@ -720,6 +720,61 @@ def _download_previews(games: list[dict], site_dir: str):
             time.sleep(1.5)  # small gap between batches to not hammer Steam
 
 
+def _normalize_name(title: str) -> str:
+    """Normalize a game title for fallback name-based lookup.
+    Keeps only lowercase letters, digits and spaces so that
+    ‘Black Myth: Wukong’ == ‘Black Myth Wukong’ etc.
+    """
+    import re as _re
+    t = title.lower()
+    t = _re.sub(r"[^a-z0-9 ]", " ", t)   # drop everything except letters/digits/space
+    t = _re.sub(r"\s+", " ", t).strip()
+    return t
+
+
+def _build_compat_json(games: list[dict], site_dir: str):
+    """Write compatibility.json: two lookup maps — by_appid and by_name."""
+    by_appid: dict[str, list[str]] = {}
+    by_name:  dict[str, list[str]] = {}
+
+    for g in games:
+        sources_raw = g.get("sources") or ""
+        # Build a clean, deduped list of source tokens
+        sources = []
+        for tok in ("ofme", "freetp", "megalist"):
+            if tok in sources_raw:
+                sources.append(tok)
+        if not sources:
+            continue
+
+        appid = g.get("steam_appid")
+        title = g.get("title") or ""
+
+        if appid and int(appid) > 0:
+            key = str(int(appid))
+            if key in by_appid:
+                # Merge sources
+                merged = list(dict.fromkeys(by_appid[key] + sources))
+                by_appid[key] = merged
+            else:
+                by_appid[key] = sources
+        else:
+            # No real AppID — index by normalized name
+            norm = _normalize_name(title)
+            if norm:
+                if norm in by_name:
+                    merged = list(dict.fromkeys(by_name[norm] + sources))
+                    by_name[norm] = merged
+                else:
+                    by_name[norm] = sources
+
+    compat = {"by_appid": by_appid, "by_name": by_name}
+    out_path = Path(site_dir) / "compatibility.json"
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(compat, f, ensure_ascii=False, separators=(",", ":"))
+    print(f"Built {out_path} ({len(by_appid)} appid entries, {len(by_name)} name entries)")
+
+
 def build(site_dir: str = "site"):
     init_db()
     conn = get_connection()
@@ -794,6 +849,9 @@ def build(site_dir: str = "site"):
     with open(site_path / "index.html", "w", encoding="utf-8") as f:
         f.write(html)
     print(f"Built {site_path / 'index.html'} ({len(games)} games, {len(html):,} bytes)")
+
+    # Export lightweight compatibility lookup for the Global Management App
+    _build_compat_json(games, site_dir)
 
 
 if __name__ == "__main__":
